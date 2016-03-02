@@ -1,2 +1,0 @@
-# Kizels
-skillz תחרות
