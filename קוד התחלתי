@@ -1,198 +1,144 @@
 using System.Collections.Generic;
 using Pirates;
-
 namespace MyBot
 {
     public class MyBot : Pirates.IPirateBot
     {
-        
+
         public void DoTurn(IPirateGame game)
         {
-            game.Debug("9");
-            int[] piratemoves = { 0, 0, 0, 0 };
-            int totmoves = 0;
-            // choose your first pirate ship
-            // show the ID of the chosen pirate ship on the log screen
-			
-צעדים עם פירטים שיש להם אוצר
-כי הכי חשוב לקדם אותם מהר			
-* יכולה להיות בעיה אם יש יותר פירטים מאשר צעדים כי לא בודקים את זה כאן
-* אתם מוסיפים צעד אחד לתנועה במקרה של אוצר, בלי קבוע. חבל.... 
+            int pirates = game.AllMyPirates().Count;
+            int turns = 6;
+            Pirate[] victims = GetVictims(game, pirates, turns);
+            Location[] destinations = GetDestinations(game, pirates);
+            int[] moves = GetMoves(game, pirates, turns, victims, destinations);
+            Sail(game, victims, destinations, moves);
 
-            for (int i = 0; i < game.MyPiratesWithTreasures().Count; i++)
+
+        }
+        public static Pirate[] GetVictims(IPirateGame game, int pirates, int turns)
+        {
+            int victimsCounter = 0;
+            Pirate[] victims = new Pirate[pirates];
+            bool victimfound = false;
+            foreach (Pirate p in game.MySoberPirates())
             {
-                piratemoves[game.MyPiratesWithTreasures()[i].Id] = 1;
-                totmoves++;
-                game.Debug("10");
-            }
-
-כדי להיות בטוחים אנחנו מסמנים את הפירטים האבודים שאין לנו מושג עד הסוף מה קורה איתם
-ככה שלא יזוזו (תנועה 0)
-* תבדקו האם בכלל צריך את הקטע הזה או שאפשר לעבור רק על רשימה של פירטים שהם לא ברשימה הזאת
-
-            for (int i = 0; i < game.MyLostPirates().Count; i++)
-            {
-                piratemoves[game.MyLostPirates()[i].Id] = 0;
-                game.Debug("11");
-            }
-
-            
-            game.Debug("12");
-            foreach (Pirate p in game.MyPiratesWithoutTreasures())
-            {
-
-                game.Debug("13");
-* אפשר כנראה לוותר על התנאי אם בודקים מלכתחילה שהוא לא בלוסט פירטס                
-                if (!p.IsLost)
+                if (!p.IsLost && !p.HasTreasure && p.ReloadTurns == 0)
                 {
-                    game.Debug("14");
-* לנסות להפוך שמות משתנים למשמעותיים     
-בדיקה אם אפשר לתקוף מישהו, הפלאג מתחיל ממצב שקר ועובר לאמת אם אפשר               
-                    bool flag1 = false;
-* לדעתי אפשר לעשות את הקטע הזה אחרת, לא לקחת את הראש לשאול קודם האם יש תורות עד התקיפה ואח״כ לעשות לולאה על כל האויבים                    
-* לא צריך להגדיר את האויב הראשון, לא משתמשים בזה במילא
-                    Pirate victim = game.EnemyPirates()[0];
-                    if (p.ReloadTurns == 0)
+                    foreach (Pirate enemy in game.EnemyPirates())
                     {
-                        game.Debug("15");
-                        foreach (Pirate enemy in game.EnemyPirates())
+                        if (!enemy.IsLost && game.InRange(p, enemy)&&victimsCounter<turns)
                         {
-                            if (!enemy.IsLost)
-                            {
-                                game.Debug("16");
-                                flag1 = game.InRange(p, enemy);
-                                game.Debug("17");
-* אפשר אולי לא לשאול את התנאי הזה בכלל ובמקום לצאת מהלולאה ברגע שמצאתם מישהו
-                                if (flag1)
-                                {
-                                    game.Debug("18");
-                                    victim = enemy;
-                                    break;
-                                }
-                            }
+                            victimsCounter++;
+                            victims[p.Id] = enemy;
+                            victimfound = true;
+                            if (enemy.HasTreasure)
+                                break;
                         }
                     }
-                    if (flag1)
-                    {
-                        game.Debug("19");
-
-* אולי כדאי להעביר את כל הביצוע של הצעדים עצמם ושל התקיפה למקום אחד בסוף אם זה מינוס 1 לתקוף
-* אפשר גם במקום סימנים של מספרים לעשות וקטור של אובייקטים יותר מורכבים כמו סוג צעד ומספר צעדים
-* dict('move_type':'attack', 'moves':1, 'victim':victim, 'location':location)
-* dict('move_type':'move', 'moves':4, 'victim':null, 'location':location)
-
-                        game.Attack(p, victim);
-                        totmoves++;
-                        piratemoves[p.Id] = -1;
-                        game.Debug("attack");
-
-                    }
+                    if (!victimfound)
+                        victims[p.Id] = null;
+                }
+                else
+                {
+                    victims[p.Id] = null;
                 }
             }
-            // choose the first available treasure
-                game.Debug("20");
-                // show the ID of the chosen treasure on the log screen
-                Treasure[] mins = new Treasure[4];
-                Location[] desmin = new Location[4];
-                game.Debug("21");
-* אולי אפשר לשאול בעוד תנאים מי שלא עם אוצר ולא אבד ולא אבדה תקוותו
-* ומי שלא בחרתם אותו כבר
-                foreach (Pirate p in game.AllMyPirates())
-                {
-                    game.Debug("22");
-                    if (!p.IsLost)
-                    {
-                        game.Debug("23");
-                        if (!p.HasTreasure)
-                        {
-* נראה לי אבל לא בטוח שזה לא מביא לכם ספינות אויב שיש להם אוצר אבל אין אוצר יותר במשחק
-* נקודה למחשבה
-                            if (game.Treasures().Count > 0)
-                            {
-* כל השורות עד הפור מיותרות לדעתי, אפשר לאתחל את המינימלי או אפשר לשמור אותו על נאל ולבדוק אחכ אם הוא נאל
-
-                                Treasure treasure = game.Treasures()[0];
-                                game.Debug("24");
-                                mins[p.Id] = game.Treasures()[0];
-                                game.Debug("25");
-* אולי לא צריך את הדסמינס בכלל כי אפשר לשמור את זה ברשימה של התנועות
-                                desmin[p.Id] = mins[p.Id].Location;
-                                game.Debug("1");
-                                for (int i = 0; i < game.Treasures().Count; i++)
-                                {
-                                    game.Debug("2");
-                                    treasure = game.Treasures()[i];
-                                    if (game.Distance(p, mins[p.Id]) > game.Distance(p, treasure))
-                                    {
-                                        mins[p.Id] = treasure;
-                                        desmin[p.Id] = mins[p.Id].Location;
-                                        game.Debug("3");
-                                    }
-                                }
-
-                            }
-                            else
-                            {
-                                desmin[p.Id] = p.InitialLocation;
-                                game.Debug("4");
-                            }
-                        }
-                        else
-                        {
-                            desmin[p.Id] = p.InitialLocation;
-                            game.Debug("5");
-                        }
-                    }
-
-                }
-* לא חקרנו לעומק אבל אם כבר ייצרתם רשימה של תנועות, תאלצו להקדים את הקוד הזה כדי שבתנועה ירשם מי מבצע את התנועה
-* אולי פונקציה פירט אופטימלי לכל סוג של תנועה, וקוראים לה לפני זה כמה פעמים
-
-                if (game.MyPiratesWithoutTreasures().Count > 0 && game.Treasures().Count > 0)
-                {
-                    Pirate minp = game.MyPiratesWithoutTreasures()[0];
-                    int min1 = 100000;
-                    game.Debug("6");
-                    foreach (Pirate p in game.MySoberPirates())
-                    {
-                        if (!p.IsLost && piratemoves[p.Id] != -1 && !p.HasTreasure)
-                        {
-                            if (game.Distance(p, mins[p.Id]) < min1)
-                            {
-                                min1 = game.Distance(p, mins[p.Id]);
-                                minp = p;
-                                game.Debug("7");
-                            }
-                        }
-                    }
-                    piratemoves[minp.Id] = 6 - totmoves;
-                }
-
-            
-            foreach (Pirate p in game.AllMyPirates())
-            {
-                if (!p.IsLost&&piratemoves[p.Id]>0)
-                {
-* התנאי הזה לא מספיק טוב כדי שהמשחק לא יתקע לפני הסוף המוחלט שלו
-* אני חושב שזה בסדר עם ריפקטור קטן, תשתמשו בליסט שיצרתם עם כל המידע ותעברו עליו ותבצעו תנועה
-                    if (game.Treasures().Count > 0)
-                    {
-                        List<Location> possibleLocations = game.GetSailOptions(p, desmin[p.Id], piratemoves[p.Id]);
-                        // set sail towards the first possible location
-                        game.SetSail(p, possibleLocations[0]);
-                        game.Debug("8");
-                    }
-                    else
-                    {
-                        List<Location> possibleLocations = game.GetSailOptions(p, p.InitialLocation, piratemoves[p.Id]);
-                        game.SetSail(p, possibleLocations[0]);
-                        game.Debug("9");
-                    }
-                }
-            }
-           
+            return victims;
         }
 
 
+
+        public static Location[] GetDestinations(IPirateGame game, int pirates)
+        {
+            Treasure[] minTreasure = new Treasure[pirates];
+            Location[] destinations = new Location[pirates];
+            foreach (Pirate p in game.AllMyPirates())
+            {
+                if (!p.IsLost && !p.HasTreasure && game.Treasures().Count > 0)
+                {
+                    minTreasure[p.Id] = game.Treasures()[0];
+                    foreach (Treasure t in game.Treasures())
+                    {
+                        if (game.Distance(p, minTreasure[p.Id]) > game.Distance(p, t))
+                            minTreasure[p.Id] = t;
+                    }
+                    destinations[p.Id] = minTreasure[p.Id].Location;
+                }
+                else
+                {
+                    destinations[p.Id] = p.InitialLocation;
+                }
+            }
+            return destinations;
+        }
+        public static int[] GetMoves(IPirateGame game, int pirates, int turns, Pirate[] victims, Location[] destinations)
+        {
+            const int ALLOWED_MOVES_WITH_TREASURE=1;
+            int[] moves = new int[pirates];
+            for (int i = 0; i < pirates; i++)
+                moves[i] = 0;
+            for (int i = 0; i < victims.Length; i++)
+            {
+                if (victims[i] != null)
+                    turns--;
+            }
+            foreach (Pirate p in game.MyPiratesWithTreasures())
+            {
+                if (turns==0 || turns- ALLOWED_MOVES_WITH_TREASURE < 0)
+                    break;
+                moves[p.Id] = ALLOWED_MOVES_WITH_TREASURE;
+                turns=turns- ALLOWED_MOVES_WITH_TREASURE;
+            }
+
+            if (game.MyPiratesWithoutTreasures().Count > 0 && game.Treasures().Count > 0)
+            {
+                Pirate minp = game.MyPiratesWithoutTreasures()[0];
+                int minDis = 100000;
+                foreach (Pirate p in game.MySoberPirates())
+                {
+                    if (!p.IsLost && victims[p.Id] == null && !p.HasTreasure)
+                    {
+                        if (game.Distance(p, destinations[p.Id]) < minDis)
+                        {
+                            minDis = game.Distance(p, destinations[p.Id]);
+                            minp = p;
+                        }
+                    }
+                }
+                moves[minp.Id] = turns;
+            }
+            if (game.Treasures().Count==0)
+            {
+                foreach(Pirate p in game.MySoberPirates())
+                {
+                    if(!p.IsLost && !p.HasTreasure && victims[p.Id]==null && turns>0 && p.Location!=destinations[p.Id])
+                    {
+                        moves[p.Id] = 1;
+                        turns--;
+                    }
+                }
+            }
+            return moves;
+        }
+        public static void Sail(IPirateGame game, Pirate[] victims, Location[] destinations, int[]moves)
+        {
+            foreach (Pirate p in game.MySoberPirates())
+            {
+                if(!p.IsLost)
+                {
+                    if (victims[p.Id] != null)
+                        game.Attack(p, victims[p.Id]);
+                    else
+                    {
+                        if(moves[p.Id]>0)
+                        {
+                            List<Location> possibleLocations = game.GetSailOptions(p, destinations[p.Id], moves[p.Id]);
+                            game.SetSail(p, possibleLocations[0]);
+                        }
+                    }
+                }
+            }
+        }
     }
 }
