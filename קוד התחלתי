@@ -37,7 +37,6 @@ namespace MyBot
                 if (movesleft != 0)
                     AttackSail(game, victims, destinations, moves, movesleft, attackerId);
             }
-
         }
 
         public static Pirate[] GetVictims(IPirateGame game, int pirates, int turnsleft)
@@ -103,7 +102,9 @@ namespace MyBot
             for(int i=0; i<victims.Length; i++)
             {
                 if (victims[i] != null)
+                {
                     turns--;
+                }
             }
             foreach (Pirate p in game.MyPiratesWithTreasures())
             {
@@ -116,7 +117,7 @@ namespace MyBot
             if (game.MyPiratesWithoutTreasures().Count > 0 && game.Treasures().Count > 0)
             {
                 Pirate minp = game.MyPiratesWithoutTreasures()[0];
-                int minDis = game.Distance(minp, destinations[minp.Id]);
+                int minDis = 10000;
                 foreach (Pirate p in game.MySoberPirates())
                 {
                     if (!p.IsLost && victims[p.Id] == null && !p.HasTreasure)
@@ -134,13 +135,11 @@ namespace MyBot
                 {
                     int leftovers = moves[minp.Id] - game.Distance(minp, destinations[minp.Id]);
                     moves[minp.Id] = game.Distance(minp, destinations[minp.Id]);
-                    game.Debug("pirate " + minp.Id + "will move " + game.Distance(minp, destinations[minp.Id]).ToString());
                     foreach (Pirate p in game.MySoberPirates())
                     {
                         if (!p.IsLost && victims[p.Id] == null && !p.HasTreasure && p!=minp)
                         {
                             moves[p.Id] = leftovers;
-                            game.Debug("pirate " +p.Id+ "got "+leftovers.ToString());
                             break;
                         }
                     }
