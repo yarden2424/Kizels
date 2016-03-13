@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using Pirates;
-namespace MyBot2
+namespace MyBot3
 {
     public class MyBot : Pirates.IPirateBot
     {
