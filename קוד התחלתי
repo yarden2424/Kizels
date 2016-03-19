@@ -4,12 +4,46 @@ namespace MyBot
 {
     public class MyBot : Pirates.IPirateBot
     {
+        static Location[] log = new Location[20];
+        static Location[] logTemp = new Location[20];
         public void DoTurn(IPirateGame game)
         {
+            if (game.GetTurn() == 1)
+            {
+                for (int i = 0; i < game.AllEnemyPirates().Count; i++)
+                {
+                    log[i] = new Location(-1, -1);
+                    logTemp[i] = new Location(-1, -1);
+                }
+            }
+            for (int i = 0; i < game.AllEnemyPirates().Count; i++)
+            {
+                if (log[i].Row == -1)
+                {
+                    logTemp[i].Row = -1;
+                    logTemp[i].Col = -1;
+                }
+                else
+                {
+                    logTemp[i].Row = log[i].Row;
+                    logTemp[i].Col = log[i].Col;
+                }
+                if (!game.AllEnemyPirates()[i].HasTreasure)
+                {
+                    log[i].Row = -1;
+                    log[i].Col = -1;
+                }
+                else
+                {
+                    log[i].Row = game.AllEnemyPirates()[i].Location.Row;
+                    log[i].Col = game.AllEnemyPirates()[i].Location.Col;
+                }
+
+            }
             int pirates = game.AllMyPirates().Count;
             int turns = game.GetActionsPerTurn();
-            Pirate[] victims = GetVictims(game, pirates, turns);
-            Location[] destinations = GetDestinations(game, pirates);
+            Pirate[] victims = GetVictims(game, pirates, turns, log, logTemp);
+            Location[] destinations = GetDestinations(game, pirates, log, logTemp);
             int[] moves = GetMoves(game, pirates, turns, victims, destinations);
             int movesleft = game.GetActionsPerTurn(); ;
             int attackerId = -1;
@@ -39,7 +73,7 @@ namespace MyBot
             }
         }
 
-        public static Pirate[] GetVictims(IPirateGame game, int pirates, int turnsleft)
+        public static Pirate[] GetVictims(IPirateGame game, int pirates, int turnsleft, Location[] log, Location[] logTemp)
         {
             Pirate[] victims = new Pirate[pirates];
             foreach (Pirate p in game.MySoberPirates())
@@ -49,7 +83,14 @@ namespace MyBot
                 {
                     foreach (Pirate enemy in game.EnemySoberPirates())
                     {
-                        if (!enemy.IsLost && game.InRange(p, enemy) && turnsleft > 0 && !(game.GetOpponentName().Equals("4") && game.Distance(p, enemy) == 4))
+                        Location l = enemy.Location;
+                        Location l2 = new Location(l.Row, l.Col);
+                        if (log[enemy.Id].Row != -1 && logTemp[enemy.Id].Row != -1)
+                        {
+                            l2.Row = l.Row + log[enemy.Id].Row - logTemp[enemy.Id].Row;
+                            l2.Col = l.Col + log[enemy.Id].Col - logTemp[enemy.Id].Col;
+                        }
+                        if (!enemy.IsLost && game.InRange(p, l2) && game.InRange(p, l) && turnsleft > 0 && !(game.GetOpponentName().Equals("4") && game.Distance(p, enemy) == 4))
                         {
                             turnsleft--;
                             victims[p.Id] = enemy;
@@ -69,16 +110,17 @@ namespace MyBot
             return victims;
         }
 
-        public static Location[] GetDestinations(IPirateGame game, int pirates)
+        public static Location[] GetDestinations(IPirateGame game, int pirates, Location[]log, Location[]logTemp)
         {
             Location[] destinations = new Location[pirates];
             foreach (Pirate p in game.MyPiratesWithTreasures())
             {
-                    destinations[p.Id] = p.InitialLocation;
+                destinations[p.Id] = p.InitialLocation;
             }
             int minDis = 10000;
             Location[] locations = new Location[pirates];
             int minId = -1;
+            int unloadedId = -1;
             foreach (Pirate p in game.MySoberPirates())
             {
                 if (!p.HasTreasure)
@@ -92,24 +134,43 @@ namespace MyBot
                     else
                     {
                         locations[p.Id] = GetClosestPirateLocation(game, p, game.EnemyPiratesWithTreasures());
-                        if (locations[p.Id] != null && game.Distance(p, locations[p.Id]) < minDis && p.ReloadTurns <= 1)
+                        if (locations[p.Id] != null && game.Distance(p, locations[p.Id]) < minDis)
                         {
-                            minDis = game.Distance(p, locations[p.Id]);
-                            minId = p.Id;
-                        }
-                            Treasure minTreasure = game.Treasures()[0];
-                            foreach (Treasure t in game.Treasures())
+                            if (p.ReloadTurns <= 1)
                             {
-                                if (game.Distance(p, minTreasure) > game.Distance(p, t))
-                                    minTreasure = t;
+                                minDis = game.Distance(p, locations[p.Id]);
+                                minId = p.Id;
                             }
-                            destinations[p.Id] = minTreasure.Location;
+                            else
+                            {
+                                unloadedId = p.Id;
+                            }
+                        }
+                        Treasure minTreasure = game.Treasures()[0];
+                        foreach (Treasure t in game.Treasures())
+                        {
+                            if (game.Distance(p, minTreasure) > game.Distance(p, t))
+                                minTreasure = t;
+                        }
+                        destinations[p.Id] = minTreasure.Location;
                     }
                 }
             }
             if (minId != -1)
             {
-                destinations[minId] =  locations[minId];
+                destinations[minId] = locations[minId];
+            }
+            else
+            {
+                if (unloadedId != -1)
+                {
+                    Pirate enemy = game.GetPirateOn(locations[unloadedId]);
+                    if (enemy != null&&log[enemy.Id].Row!=-1&&logTemp[enemy.Id].Row!=-1)//just in case
+                    {
+                        game.Debug("SUICIDE");
+                        destinations[unloadedId] = new Location(enemy.Location.Row + log[enemy.Id].Row - logTemp[enemy.Id].Row, enemy.Location.Col + log[enemy.Id].Col - logTemp[enemy.Id].Col);
+                    }
+                }
             }
             return destinations;
         }
@@ -145,7 +206,7 @@ namespace MyBot
             const int ALLOWED_MOVES_WITH_TREASURE = 1;
             foreach (Pirate p in game.MyPiratesWithTreasures())
             {
-                if (turns == 0 || turns - ALLOWED_MOVES_WITH_TREASURE < 0 )
+                if (turns == 0 || turns - ALLOWED_MOVES_WITH_TREASURE < 0)
                     break;
                 moves[p.Id] = ALLOWED_MOVES_WITH_TREASURE;
                 turns = turns - ALLOWED_MOVES_WITH_TREASURE;
@@ -190,12 +251,10 @@ namespace MyBot
 
         public static void Sail(IPirateGame game, Pirate[] victims, Location[] destinations, int[] moves)
         {
-            Location[] FinalDestinations = new Location[victims.Length];
+            Location[] FinalDestinations = new Location[game.AllMyPirates().Count];
             int index = 0;
             foreach (Pirate p in game.MySoberPirates())
             {
-                game.Debug("id: " + p.Id + " row: " + destinations[p.Id].Row+ " col: " + destinations[p.Id].Col);
-                game.Debug("id: " + p.Id + " rt: " + p.ReloadTurns);
                 int extramoves = 0;
                 if (!p.IsLost)
                 {
@@ -283,7 +342,7 @@ namespace MyBot
             foreach (Pirate enemy in game.EnemySoberPirates())
             {
                 int distance = game.Distance(p, enemy);
-                if (distance <= D &&distance>=2&& enemy.HasTreasure && !IsEnemyVictim(enemy, victims))
+                if (distance <= D && distance >= 2 && enemy.HasTreasure && !IsEnemyVictim(enemy, victims))
                     return enemy;
             }
             return null;
@@ -306,6 +365,8 @@ namespace MyBot
                 {
                     game.Attack(p, victims[p.Id]);
                     movesleft--;
+                    if (game.GetTurn() == 384 || game.GetTurn() == 385)
+                        game.Debug("attacker: " + p.Id);
                 }
             }
             foreach (Pirate p in game.MyPiratesWithTreasures())
@@ -319,7 +380,7 @@ namespace MyBot
             }
             foreach (Pirate p in game.MySoberPirates())
             {
-                if (!p.HasTreasure && !p.IsLost && p.Id != attackerId && movesleft > 0)
+                if (!p.HasTreasure && !p.IsLost && p.Id != attackerId && movesleft > 0 && victims[p.Id] == null)
                 {
                     List<Location> possibleLocations = game.GetSailOptions(p, destinations[p.Id], movesleft);
                     game.SetSail(p, possibleLocations[0]);
